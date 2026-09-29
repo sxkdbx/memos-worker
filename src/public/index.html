@@ -2612,34 +2612,6 @@
 	margin: 0;
 	font-size: 1.5rem;
   }
-  .attachments-tabs {
-	display: flex;
-	gap: 0.5rem;
-	background-color: var(--bg-color);
-	padding: 0.25rem;
-	border-radius: 8px;
-  }
-  .tab-btn {
-	padding: 0.5rem 1rem;
-	font-size: 0.9rem;
-	font-weight: 500;
-	border: none;
-	border-radius: 6px;
-	background-color: transparent;
-	color: var(--text-secondary);
-	cursor: pointer;
-	transition: all 0.2s ease;
-  }
-  .tab-btn:hover {
-	background-color: var(--surface-color);
-	color: var(--text-color);
-  }
-  .tab-btn.active {
-	background-color: var(--primary-color);
-	color: white;
-	box-shadow: 0 2px 8px rgba(var(--primary-color-rgb), 0.3);
-  }
-
   #attachments-content.loading-state {
 	display: flex;
 	justify-content: center;
@@ -3276,12 +3248,6 @@
 			<div id="attachments-viewer" style="display: none;">
 				<header class="attachments-header">
 					<h3>文件</h3>
-					<div class="attachments-tabs">
-						<button class="tab-btn active" data-filter="all">✨ All</button>
-						<button class="tab-btn" data-filter="image">🏞️ Images</button>
-						<button class="tab-btn" data-filter="video">🎬 Videos</button>
-						<button class="tab-btn" data-filter="file">📄 Files</button>
-					</div>
 				</header>
 				<div id="attachments-content" class="loading-state">
 					<div class="spinner"></div>
@@ -4249,7 +4215,6 @@
 	const attachmentsTabBtn = document.getElementById('attachments-tab-btn');
 	const attachmentsViewer = document.getElementById('attachments-viewer');
 	const attachmentsContent = document.getElementById('attachments-content');
-	const attachmentsTabs = document.querySelector('.attachments-tabs');
 
 	const moreActionsContainer = document.getElementById('more-actions-container');
 	const moreActionsBtn = document.getElementById('more-actions-btn');
@@ -4666,7 +4631,6 @@
 
 	const attachmentsState = {
 		allData: [],
-		currentFilter: 'all',
 		isLoaded: false, // 这个现在表示是否已加载过第一页
 		isLoading: false,
 		currentPage: 1,
@@ -4721,10 +4685,7 @@
 			attachmentsContent.innerHTML = '';
 		}
 
-		const filteredData = attachmentsToRender.filter(item => {
-			if (attachmentsState.currentFilter === 'all') return true;
-			return item.type === attachmentsState.currentFilter;
-		});
+		const filteredData = attachmentsToRender;
 
 		if (isInitialLoad && filteredData.length === 0 && !attachmentsState.hasMore) {
 			attachmentsContent.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">没有可显示的内容。</p>';
@@ -4814,18 +4775,6 @@
 		appLayoutContainer.classList.add('attachments-mode');
 		await fetchAllAttachments(true);
 	}
-
-	// --- 附件页面的子选项卡事件监听器 ---
-	attachmentsTabs.addEventListener('click', (e) => {
-		const tabBtn = e.target.closest('.tab-btn');
-		if (!tabBtn || tabBtn.classList.contains('active')) return;
-
-		attachmentsTabs.querySelector('.active').classList.remove('active');
-		tabBtn.classList.add('active');
-
-		attachmentsState.currentFilter = tabBtn.dataset.filter;
-		fetchAllAttachments(true);
-	});
 
 	// --- 为附件内容区添加无限滚动和图片预览的事件委托 ---
 	attachmentsContent.addEventListener('scroll', () => {
@@ -5000,16 +4949,6 @@
 	attachmentsTabBtn.addEventListener('click', () => {
 		if (appState.baseMode === 'attachments') return;
 		showAttachmentsViewer();
-	});
-
-	// --- 为附件页面的子选项卡添加事件委托 ---
-	attachmentsTabs.addEventListener('click', (e) => {
-		const tabBtn = e.target.closest('.tab-btn');
-		if (!tabBtn || tabBtn.classList.contains('active')) return;
-		attachmentsTabs.querySelector('.active').classList.remove('active');
-		tabBtn.classList.add('active');
-		attachmentsState.currentFilter = tabBtn.dataset.filter;
-		renderAttachments();
 	});
 
 	async function handleImageUploadAndInsert(files, textarea) {
