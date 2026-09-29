@@ -25,16 +25,7 @@ CREATE TABLE note_tags (
 );
 
 
-CREATE TABLE nodes (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT,
-  parent_id TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (parent_id) REFERENCES nodes(id) ON DELETE CASCADE
-);
+-- （Docs 模块已移除，nodes 表不再需要）
 -- =============================================
 -- Section 2: Full-Text Search Virtual Table
 -- (This is the only FTS-related statement you need)
