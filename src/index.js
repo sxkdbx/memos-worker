@@ -1,16 +1,66 @@
+import { uploadMedia, deleteMedia, ghPathFromUrl } from './github-media.js';
+
 const NOTES_PER_PAGE = 10;
 const SESSION_DURATION_SECONDS = 30*86400; // Session 有效期: 30 天
 const SESSION_COOKIE = '__session';
 export default {
 	async fetch(request, env, ctx) {
-		return await handleApiRequest(request, env);
+		return await handleApiRequest(request, env, ctx);
 	},
 };
 
 /**
+ * 把 multipart 里的文件传到 GitHub 仓库，返回可直接外链的信息。
+ * 注意：必须一次性读成字节，因为 GitHub Contents API 只接受 base64。
+ */
+async function uploadFileToGithub(env, file) {
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	return uploadMedia(env, {
+		bytes,
+		filename: file.name || 'file',
+		mime: file.type || 'application/octet-stream',
+	});
+}
+
+/** 从远程 URL 取回字节再传 GitHub（Telegram 图片/视频/文件走这条路） */
+async function uploadRemoteToGithub(env, downloadUrl, filename, mime) {
+	const res = await fetch(downloadUrl);
+	if (!res.ok) throw new Error(`从远端下载文件失败: ${res.status}`);
+	const bytes = new Uint8Array(await res.arrayBuffer());
+	return uploadMedia(env, { bytes, filename, mime });
+}
+
+/**
+ * 尽力删除 GitHub 上的媒体文件；失败只记日志，绝不阻断数据库操作。
+ * @param {object} env
+ * @param {Array<string|null>} paths 仓库内路径，null / 空会被忽略
+ */
+async function safeDeleteGithubMedia(env, paths) {
+	const list = (paths || []).filter(Boolean);
+	if (!list.length || !env.GITHUB_TOKEN) return;
+	for (const p of list) {
+		try {
+			await deleteMedia(env, p);
+		} catch (e) {
+			console.error(`[github-media] 删除失败（外链可能仍可访问）: ${p} -> ${e.message}`);
+		}
+	}
+}
+
+/** 从 files 数组里取出待删除的仓库路径 */
+function ghPathsFromFiles(files) {
+	return (files || []).map(f => f && f.path).filter(Boolean);
+}
+
+/** 从 pics / videos 里的外链 URL 反解出仓库路径 */
+function ghPathsFromUrls(env, urls) {
+	return (urls || []).map(u => ghPathFromUrl(env, u)).filter(Boolean);
+}
+
+/**
  * API 请求的统一处理器和路由
  */
-async function handleApiRequest(request, env) {
+async function handleApiRequest(request, env, ctx) {
 	const { pathname } = new URL(request.url);
 
 	// --- Memos 分享公开路由 ---
@@ -135,7 +185,7 @@ async function handleApiRequest(request, env) {
 		}
 	}
 	if (request.method === 'POST' && pathname === '/api/upload/image') {
-		return handleStandaloneImageUpload(request, env);
+		return handleStandaloneImageUpload(request, env, ctx);
 	}
 	const imageMatch = pathname.match(/^\/api\/images\/([a-zA-Z0-9-]+)$/);
 	if (imageMatch) {
@@ -435,7 +485,7 @@ async function handleGetSettings(request, env) {
 		showRightSidebar: true,
 		hideEditorInWaterfall: false,
 		showHeatmap: true, // 默认显示热力图
-		imageUploadDestination: 'local', // 默认使用R2
+		imageUploadDestination: 'local', // 'local'=GitHub公开仓库+jsDelivr直链, 'imgur'=Imgur
 		imgurClientId: '',
 		surfaceColor: '#ffffff',
 		surfaceColorDark: '#151f31',
@@ -583,13 +633,18 @@ async function handleNotesList(request, env) {
 					throw new Error("Failed to create note and get ID.");
 				}
 
-				// --- 【重要逻辑调整】现在上传的文件，只有非图片类型才算作 "附件" (files) ---
+				// --- 只有非图片类型才算作 "附件" (files)；图片走粘贴上传进 pics ---
 				for (const file of files) {
-					// 只有当文件存在，并且 MIME 类型不是图片时，才将其添加到 filesMeta
 					if (file.name && file.size > 0 && !file.type.startsWith('image/')) {
-						const fileId = crypto.randomUUID();
-						await env.NOTES_R2_BUCKET.put(`${noteId}/${fileId}`, file.stream());
-						filesMeta.push({ id: fileId, name: file.name, size: file.size, type: file.type });
+						const media = await uploadFileToGithub(env, file);
+						filesMeta.push({
+							id: crypto.randomUUID(),
+							name: file.name,
+							size: file.size,
+							type: file.type,
+							url: media.url,     // jsDelivr 直链
+							path: media.path,   // 删除笔记时要用到
+						});
 					}
 				}
 
@@ -649,27 +704,25 @@ async function handleNoteDetail(request, noteId, env) {
 					const content = formData.get('content')?.toString() ?? existingNote.content;
 					let currentFiles = existingNote.files;
 
-					// --- 现在的文件处理只关心非图片附件 ---
-					// 处理附件删除 (逻辑不变，因为它操作的是 files 字段)
+					// --- 附件删除：先按 path 从 GitHub 仓库删除，再从 files 数组移除 ---
 					const filesToDelete = JSON.parse(formData.get('filesToDelete') || '[]');
 					if (filesToDelete.length > 0) {
-						const r2KeysToDelete = filesToDelete.map(fileId => `${id}/${fileId}`);
-						await env.NOTES_R2_BUCKET.delete(r2KeysToDelete);
+						const doomed = currentFiles.filter(file => filesToDelete.includes(file.id));
+						await safeDeleteGithubMedia(env, ghPathsFromFiles(doomed));
 						currentFiles = currentFiles.filter(file => !filesToDelete.includes(file.id));
 					}
 
 					// 在处理完文件删除后，检查笔记是否应该被删除
 					const hasNewFiles = formData.getAll('file').some(f => f.name && f.size > 0);
 					if (content.trim() === '' && currentFiles.length === 0 && !hasNewFiles) {
-						// 笔记即将变空，执行删除操作
-						// 1. 删除 R2 中的所有剩余文件（如果有的话，虽然逻辑上这里 currentFiles 应该是空的）
-						const allR2Keys = existingNote.files.map(file => `${id}/${file.id}`);
-						if (allR2Keys.length > 0) {
-							await env.NOTES_R2_BUCKET.delete(allR2Keys);
-						}
-						// 2. 从数据库删除笔记
+						// 笔记即将变空：清理 GitHub 上剩余的附件，再删数据库记录
+						await safeDeleteGithubMedia(env, ghPathsFromFiles(existingNote.files));
+						// 同时清理正文里引用的图片（pics 存的是 jsDelivr 外链）
+						try {
+							const oldPics = JSON.parse(existingNote.pics || '[]');
+							await safeDeleteGithubMedia(env, ghPathsFromUrls(env, oldPics));
+						} catch (e) { /* pics 解析失败则跳过 */ }
 						await db.prepare("DELETE FROM notes WHERE id = ?").bind(id).run();
-						// 3. 返回特殊标记，告知前端整个笔记已被删除
 						return jsonResponse({ success: true, noteDeleted: true });
 					}
 					// 处理新附件上传
@@ -677,9 +730,15 @@ async function handleNoteDetail(request, noteId, env) {
 					for (const file of newFiles) {
 						// 只有当文件存在，并且不是图片时，才作为附件处理
 						if (file.name && file.size > 0 && !file.type.startsWith('image/')) {
-							const fileId = crypto.randomUUID();
-							await env.NOTES_R2_BUCKET.put(`${id}/${fileId}`, file.stream());
-							currentFiles.push({ id: fileId, name: file.name, size: file.size, type: file.type });
+							const media = await uploadFileToGithub(env, file);
+							currentFiles.push({
+								id: crypto.randomUUID(),
+								name: file.name,
+								size: file.size,
+								type: file.type,
+								url: media.url,
+								path: media.path,
+							});
 						}
 					}
 
@@ -718,38 +777,25 @@ async function handleNoteDetail(request, noteId, env) {
 			}
 
 			case 'DELETE': {
-				let allR2KeysToDelete = [];
+				// 1. 附件：files[].path 就是仓库内路径
+				const pathsToDelete = ghPathsFromFiles(existingNote.files);
 
-				if (existingNote.files && existingNote.files.length > 0) {
-					const attachmentKeys = existingNote.files
-						.filter(file => file.id)
-						.map(file => `${id}/${file.id}`);
-					allR2KeysToDelete.push(...attachmentKeys);
-				}
+				// 2. 正文里的图片：pics 存的是 jsDelivr 外链，反解出路径
 				let picUrls = [];
 				if (typeof existingNote.pics === 'string') {
 					try { picUrls = JSON.parse(existingNote.pics); } catch (e) { }
 				}
+				pathsToDelete.push(...ghPathsFromUrls(env, picUrls));
 
-				if (picUrls.length > 0) {
-					const imageKeys = picUrls.map(url => {
-						const imageMatch = url.match(/^\/api\/images\/([a-zA-Z0-9-]+)$/);
-						if (imageMatch) {
-							return `uploads/${imageMatch[1]}`;
-						}
-						const fileMatch = url.match(/^\/api\/files\/\d+\/([a-zA-Z0-9-]+)$/);
-						if (fileMatch) {
-							return `${id}/${fileMatch[1]}`;
-						}
-						return null;
-					}).filter(key => key !== null);
-
-					allR2KeysToDelete.push(...imageKeys);
+				// 3. videos 里同样是外链
+				let videoUrls = [];
+				if (typeof existingNote.videos === 'string') {
+					try { videoUrls = JSON.parse(existingNote.videos); } catch (e) { }
 				}
+				pathsToDelete.push(...ghPathsFromUrls(env, videoUrls));
 
-				if (allR2KeysToDelete.length > 0) {
-					await env.NOTES_R2_BUCKET.delete(allR2KeysToDelete);
-				}
+				// 尽力删除，失败不阻断数据库删除（外链可能仍可访问，这是方案固有特性）
+				await safeDeleteGithubMedia(env, pathsToDelete);
 
 				await db.prepare("DELETE FROM notes WHERE id = ?").bind(id).run();
 
@@ -786,43 +832,16 @@ async function handleFileRequest(noteId, fileId, request, env) {
 
 	const fileMeta = files.find(f => f.id === fileId);
 
-	// 尝试从 R2 获取文件对象
-	const object = await env.NOTES_R2_BUCKET.get(`${id}/${fileId}`);
-	if (object === null) {
-		// 如果 R2 中确实没有这个文件，才返回 404
+	// 文件本体现在托管在 GitHub + jsDelivr，这里只做 302 跳转，
+	// 不再由 Worker 代理字节流（省 CPU，也不消耗 GitHub API 额度）。
+	if (!fileMeta || !fileMeta.url) {
 		return new Response('File not found in storage', { status: 404 });
 	}
 
 	const headers = new Headers();
-	object.writeHttpMetadata(headers); // 从 R2 对象中写入元数据（如 Content-Type）
-	headers.set('etag', object.httpEtag);
-	headers.set('Cache-Control', 'public, max-age=86400, immutable');
-
-	// --- 根据是否存在 fileMeta 来决定如何设置 headers ---
-	if (fileMeta) {
-		// 【情况一：元数据存在】这是标准文件或旧的图片，按原逻辑处理
-		const contentType = fileMeta.type || 'application/octet-stream';
-		const fileExtension = fileMeta.name.split('.').pop().toLowerCase();
-		const textLikeExtensions = ['yml', 'yaml', 'md', 'log', 'toml', 'sh', 'py', 'js', 'json', 'css', 'html'];
-
-		if (contentType.startsWith('text/') || textLikeExtensions.includes(fileExtension)) {
-			headers.set('Content-Type', 'text/plain; charset=utf-8');
-		} else {
-			headers.set('Content-Type', contentType);
-		}
-
-		const isPreview = new URL(request.url).searchParams.get('preview') === 'true';
-		const disposition = isPreview ? 'inline' : 'attachment';
-		headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(fileMeta.name)}"`);
-	} else {
-		// 【情况二：元数据不存在】这是新的 Telegram 图片，我们只确保它能被浏览器正确显示
-		// Content-Type 已经通过 object.writeHttpMetadata(headers) 从 R2 中设置好了，
-		// 这通常足够让浏览器正确渲染图片。
-		// 我们将其设置为 inline，确保它在 <img> 标签中能显示而不是被下载。
-		headers.set('Content-Disposition', 'inline');
-	}
-
-	return new Response(object.body, { headers });
+	headers.set('Location', fileMeta.url);
+	headers.set('Cache-Control', 'public, max-age=86400');
+	return new Response(null, { status: 302, headers });
 }
 /**
  *  将 Telegram 的格式化实体 (entities) 转换为 Markdown 文本
@@ -993,7 +1012,6 @@ async function handleTelegramWebhook(request, env, secret) {
 		}
 
 		const db = env.DB;
-		const bucket = env.NOTES_R2_BUCKET;
 		if (!botToken) {
 			console.error("TELEGRAM_BOT_TOKEN secret is not set.");
 			return new Response('Bot not configured', { status: 500 });
@@ -1054,7 +1072,7 @@ async function handleTelegramWebhook(request, env, secret) {
 			throw new Error("无法在数据库中创建笔记记录。");
 		}
 
-		// 图片处理（保持二次上传）
+		// 图片处理（从 Telegram 下载后转存 GitHub，拿到 jsDelivr 外链）
 		if (photo) {
 			const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${photo.file_id}`;
 			const fileInfoRes = await fetch(getFileUrl);
@@ -1063,14 +1081,10 @@ async function handleTelegramWebhook(request, env, secret) {
 			const filePath = fileInfo.result.file_path;
 			const fileName = `photo_${message.message_id}.${(filePath.split('.').pop() || 'jpg')}`;
 			const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-			const fileRes = await fetch(downloadUrl);
-			if (!fileRes.ok) throw new Error("从 Telegram 下载图片失败。");
-			const fileId = crypto.randomUUID();
-			await bucket.put(`${noteId}/${fileId}`, fileRes.body);
-			const internalFileUrl = `/api/files/${noteId}/${fileId}`;
 
-			picObjects.push(internalFileUrl); // 为了兼容性，图片直接存 URL 字符串
-			mediaEmbeds.push(`![${fileName}](${internalFileUrl})`);
+			const media = await uploadRemoteToGithub(env, downloadUrl, fileName, 'image/jpeg');
+			picObjects.push(media.url); // pics 存 URL 字符串
+			mediaEmbeds.push(`![${fileName}](${media.url})`);
 		}
 
 		if (video) {
@@ -1080,19 +1094,16 @@ async function handleTelegramWebhook(request, env, secret) {
 				videoObjects.push(proxyUrl);
 				mediaEmbeds.push(`<video src="${proxyUrl}" width="100%" controls muted></video>`);
 			} else {
-				// --- 二次上传模式 ---
+				// --- 转存 GitHub 模式 ---
 				const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${video.file_id}`;
 				const fileInfoRes = await fetch(getFileUrl);
 				const fileInfo = await fileInfoRes.json();
 				if (!fileInfo.ok) throw new Error(`Telegram getFile API 错误 (video): ${fileInfo.description}`);
 				const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
-				const fileRes = await fetch(downloadUrl);
-				if (!fileRes.ok) throw new Error("从 Telegram 下载视频失败。");
-				const fileId = crypto.randomUUID();
-				await bucket.put(`${noteId}/${fileId}`, fileRes.body);
-				const internalFileUrl = `/api/files/${noteId}/${fileId}`;
-				videoObjects.push(internalFileUrl);
-				mediaEmbeds.push(`<video src="${internalFileUrl}" width="100%" controls muted></video>`);
+				const vName = `video_${message.message_id}.${(fileInfo.result.file_path.split('.').pop() || 'mp4')}`;
+				const media = await uploadRemoteToGithub(env, downloadUrl, vName, 'video/mp4');
+				videoObjects.push(media.url);
+				mediaEmbeds.push(`<video src="${media.url}" width="100%" controls muted></video>`);
 			}
 		}
 
@@ -1110,21 +1121,22 @@ async function handleTelegramWebhook(request, env, secret) {
 				// 可以在正文加一个占位符，但这需要前端支持渲染
 				// finalContent += `\n\n[Proxy File: ${document.file_name}]`;
 			} else {
-				// --- 二次上传模式 ---
+				// --- 转存 GitHub 模式 ---
 				const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${document.file_id}`;
 				const fileInfoRes = await fetch(getFileUrl);
 				const fileInfo = await fileInfoRes.json();
 				if (!fileInfo.ok) throw new Error(`Telegram getFile API 错误 (document): ${fileInfo.description}`);
 				const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.result.file_path}`;
-				const fileRes = await fetch(downloadUrl);
-				if (!fileRes.ok) throw new Error("从 Telegram 下载文件失败。");
-				const fileId = crypto.randomUUID();
-				await bucket.put(`${noteId}/${fileId}`, fileRes.body);
+				const media = await uploadRemoteToGithub(
+					env, downloadUrl, document.file_name, document.mime_type || 'application/octet-stream'
+				);
 				filesMeta.push({
-					id: fileId,
+					id: crypto.randomUUID(),
 					name: document.file_name,
 					size: document.file_size,
-					type: document.mime_type || 'application/octet-stream'
+					type: document.mime_type || 'application/octet-stream',
+					url: media.url,
+					path: media.path,
 				});
 			}
 		}
@@ -1254,9 +1266,9 @@ async function processNoteTags(db, noteId, content) {
 }
 /**
  * 处理独立的图片上传请求 (从粘贴操作)
- * 将图片存入 R2 的一个通用 'uploads' 文件夹中
+ * 改为上传到 GitHub 公开仓库，返回 jsDelivr 直链。
  */
-async function handleStandaloneImageUpload(request, env) {
+async function handleStandaloneImageUpload(request, env, ctx) {
 	try {
 		const formData = await request.formData();
 		const file = formData.get('file');
@@ -1265,23 +1277,27 @@ async function handleStandaloneImageUpload(request, env) {
 			return jsonResponse({ error: 'A file is required for upload.' }, 400);
 		}
 
-		const imageId = crypto.randomUUID();
-		// 我们将独立上传的图片统一放到一个 'uploads/' 目录下，与笔记附件分开
-		const r2Key = `uploads/${imageId}`;
+		// 上传到 GitHub，返回钉在 commit SHA 上的 jsDelivr 直链（立即可见）
+		const media = await uploadFileToGithub(env, file);
 
-		// 将文件流上传到 R2
-		await env.NOTES_R2_BUCKET.put(r2Key, file.stream(), {
-			httpMetadata: { contentType: file.type },
+		// 预热：触发 jsDelivr 首次回源，用户第一次打开不会慢
+		if (ctx) {
+			ctx.waitUntil(fetch(media.url, { method: 'GET' }).catch(() => {}));
+		}
+
+		return jsonResponse({
+			success: true,
+			url: media.url,
+			fallbacks: media.fallbacks,
+			path: media.path,
+			name: media.name,
+			size: media.size,
 		});
-
-		// 返回一个可用于访问此图片的内部 URL
-		// 这个 URL 对应我们下面创建的 handleServeStandaloneImage 函数的路由
-		const imageUrl = `/api/images/${imageId}`;
-		return jsonResponse({ success: true, url: imageUrl });
 
 	} catch (e) {
 		console.error("Standalone Image Upload Error:", e.message);
-		return jsonResponse({ error: 'Upload failed', message: e.message }, 500);
+		const status = typeof e.status === 'number' ? e.status : 500;
+		return jsonResponse({ error: 'Upload failed', message: e.message }, status);
 	}
 }
 
@@ -1388,26 +1404,15 @@ async function handleGetAllAttachments(request, env) {
 }
 
 /**
- * 根据 ID 从 R2 中提供（服务）一个独立上传的图片
- * @param {string} imageId The UUID of the image.
- * @param {object} env The Worker environment/bindings.
- * @returns {Promise<Response>}
+ * 旧版内部图片路由 /api/images/:imageId。
+ * 媒体已迁移到 GitHub + jsDelivr，不再由 Worker 代理读取，
+ * 这里保留路由只是为了给历史链接一个明确回复，而不是抛异常。
  */
 async function handleServeStandaloneImage(imageId, env) {
-	const r2Key = `uploads/${imageId}`;
-	const object = await env.NOTES_R2_BUCKET.get(r2Key);
-
-	if (object === null) {
-		return new Response('File not found', { status: 404 });
-	}
-
-	const headers = new Headers();
-	object.writeHttpMetadata(headers);
-	headers.set('etag', object.httpEtag);
-	// 设置长时间的浏览器缓存，因为这些图片内容是不可变的
-	headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-
-	return new Response(object.body, { headers });
+	return new Response(
+		'该图片路径已废弃：媒体已迁移到 GitHub 公开仓库 + jsDelivr 直链。请重新上传图片。',
+		{ status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+	);
 }
 
 
@@ -1672,7 +1677,8 @@ async function handleShareFileRequest(noteId, fileId, request, env) {
 				noteId: id,
 				fileId: file.id,
 				fileName: file.name,
-				contentType: file.type
+				contentType: file.type,
+				url: file.url // jsDelivr 直链，公开访问时直接跳转
 			}));
 
 			// 2. 将 public_id 持久化到 D1 数据库中
@@ -1701,42 +1707,16 @@ async function handlePublicFileRequest(publicId, request, env) {
 		return new Response('Public link not found or has expired.', { status: 404 });
 	}
 
-	let object;
-	let fileName;
-	let contentType;
-
-	if (kvData.standaloneImageId) {
-		// 1. 是独立上传的图片
-		object = await env.NOTES_R2_BUCKET.get(`uploads/${kvData.standaloneImageId}`);
-		fileName = kvData.fileName || `image_${kvData.standaloneImageId}.png`;
-		contentType = kvData.contentType || 'image/png';
-	} else if (kvData.noteId && kvData.fileId) {
-		// 2. 是笔记的附件
-		object = await env.NOTES_R2_BUCKET.get(`${kvData.noteId}/${kvData.fileId}`);
-		fileName = kvData.fileName;
-		contentType = kvData.contentType;
-	} else {
-		return new Response('Invalid public link data.', { status: 500 });
-	}
-
-	if (object === null) {
-		return new Response('File not found in storage', { status: 404 });
+	// 分享链接只做跳转，字节流交给 jsDelivr
+	const targetUrl = kvData.url;
+	if (!targetUrl) {
+		return new Response('Invalid public link data (missing url).', { status: 500 });
 	}
 
 	const headers = new Headers();
-	object.writeHttpMetadata(headers);
-	headers.set('etag', object.httpEtag);
-	headers.set('Cache-Control', 'public, max-age=86400, immutable');
-
-	headers.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-	const textLikeExtensions = ['txt', 'md', 'log', 'json', 'js', 'css', 'html', 'xml', 'yaml', 'yml', 'py', 'sh', 'rb', 'go', 'java', 'c', 'cpp'];
-	if ((contentType || '').startsWith('text/') || textLikeExtensions.includes((fileName || '').split('.').pop().toLowerCase())) {
-		headers.set('Content-Type', 'text/plain; charset=utf-8');
-	} else {
-		headers.set('Content-Type', contentType || 'application/octet-stream');
-	}
-
-	return new Response(object.body, { headers });
+	headers.set('Location', targetUrl);
+	headers.set('Cache-Control', 'public, max-age=86400');
+	return new Response(null, { status: 302, headers });
 }
 
 /**
@@ -1990,19 +1970,20 @@ async function handleMergeNotes(request, env) {
 		// 删除源笔记
 		await db.prepare("DELETE FROM notes WHERE id = ?").bind(sourceNote.id).run();
 
-		// 将源笔记的文件移动到目标笔记的 R2 目录下
-		if (sourceFiles.length > 0) {
-			const r2 = env.NOTES_R2_BUCKET;
-			for (const file of sourceFiles) {
-				const oldKey = `${sourceNote.id}/${file.id}`;
-				const newKey = `${targetNote.id}/${file.id}`;
-				const object = await r2.get(oldKey);
-				if (object) {
-					await r2.put(newKey, object.body);
-					await r2.delete(oldKey);
-				}
-			}
-		}
+		// 文件本体现在是 jsDelivr 外链，与目标笔记 ID 无关，
+		// 因此只需把 files 数组合并即可，无需搬运任何字节。
+
+		// 合并 pics / videos（都是外链数组），避免源笔记删除后引用丢失
+		const mergeUrls = (a, b) => {
+			const parse = v => { try { return JSON.parse(v || '[]'); } catch { return []; } };
+			return JSON.stringify([...new Set([...parse(a), ...parse(b)])]);
+		};
+		await db.prepare("UPDATE notes SET pics = ?, videos = ? WHERE id = ?")
+			.bind(
+				mergeUrls(targetNote.pics, sourceNote.pics),
+				mergeUrls(targetNote.videos, sourceNote.videos),
+				targetNote.id
+			).run();
 
 		// 返回更新后的目标笔记
 		const updatedMergedNote = await db.prepare("SELECT * FROM notes WHERE id = ?").bind(targetNote.id).first();
@@ -2014,7 +1995,7 @@ async function handleMergeNotes(request, env) {
 
 	} catch (e) {
 		console.error("Merge Notes Error:", e.message, e.cause);
-		return jsonResponse({ error: 'Database or R2 error during merge', message: e.message }, 500);
+		return jsonResponse({ error: 'Database error during merge', message: e.message }, 500);
 	}
 }
 

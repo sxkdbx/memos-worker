@@ -17,7 +17,25 @@ binding = "NOTES_KV"
 id = "cdf931a0c7de478a830bfafffd5e135d"
 preview_id = ""
 
+# R2 已不再使用：媒体统一托管到 GitHub 公开仓库 + jsDelivr 直链
+# （下面这段保持注释即可，不要取消注释）
 #[[r2_buckets]]
 #binding = "NOTES_R2_BUCKET"
 #bucket_name = "YOUR_R2_BUCKET_NAME"
 #preview_bucket_name = "notes-files-preview"
+
+# ---------------------------------------------------------------------------
+# GitHub 媒体仓库配置
+# GITHUB_TOKEN 属于敏感信息，请务必用 wrangler secret 写入，不要放在这里：
+#   npx wrangler secret put GITHUB_TOKEN
+# ---------------------------------------------------------------------------
+[vars]
+GITHUB_OWNER = "sxkdbx"
+GITHUB_REPO = "memos-worker-Picture"
+GITHUB_BRANCH = "main"
+JSD_HOST = "cdn.jsdelivr.net"
+# 单文件上限（字节）。默认 1MB，受 Workers 免费套餐 10ms CPU 限制。
+MEDIA_MAX_BYTES = "1048576"
+MEDIA_PREFIX = "media"
+# 主域名不通时前端可降级的备用域名，逗号分隔
+MEDIA_FALLBACK_HOSTS = "fastly.jsdelivr.net,gcore.jsdelivr.net,testingcf.jsdelivr.net"
