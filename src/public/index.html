@@ -3316,10 +3316,6 @@
 				<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 0 24 24" width="28px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
 				<span>文件</span>
 			</button>
-			<a href="/docs" target="_blank" class="sidebar-tab-btn" title="打开文档">
-				<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 0 24 24" width="28px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-				<span>文档</span>
-			</a>
 		</div>
 	</aside>
 
@@ -3563,10 +3559,6 @@
 				<div class='setting-item'>
 					<label for='toggle-feature-sharing'>启用分享</label>
 					<input type='checkbox' id='toggle-feature-sharing' class='toggle-switch'>
-				</div>
-				<div class='setting-item'>
-					<label for='toggle-feature-docs'>显示文档入口</label>
-					<input type='checkbox' id='toggle-feature-docs' class='toggle-switch'>
 				</div>
 			</div>
 
@@ -4090,7 +4082,6 @@
 		showArchive: true,      // 控制归档
 		enablePinning: true,    // 控制置顶功能
 		enableSharing: true,    // 控制分享功能
-		showDocs: true,          // 控制 Docs 链接
 		enableContentTruncation: true,
 	}
 	let settings = defaultSettings;
@@ -5385,10 +5376,6 @@
 		document.getElementById('favorites-tab-btn').style.display = settings.showFavorites ? '' : 'none';
 		document.getElementById('archive-tab-btn').style.display = settings.showArchive ? '' : 'none';
 
-		const docsLink = document.querySelector('.sidebar-buttons-group a[href="/docs"]');
-		if (docsLink) {
-			docsLink.style.display = settings.showDocs ? '' : 'none';
-		}
 	}
 	/**
 	 * 根据当前加载的设置，应用所有UI效果
@@ -5502,7 +5489,6 @@
 		document.getElementById('toggle-feature-archive').checked = settings.showArchive;
 		document.getElementById('toggle-feature-pinning').checked = settings.enablePinning;
 		document.getElementById('toggle-feature-sharing').checked = settings.enableSharing;
-		document.getElementById('toggle-feature-docs').checked = settings.showDocs;
 	}
 
 	function initializeSettings() {
@@ -5519,10 +5505,6 @@
 		});
 		document.getElementById('toggle-feature-sharing').addEventListener('change', (e) => {
 			settings.enableSharing = e.target.checked;
-		});
-		document.getElementById('toggle-feature-docs').addEventListener('change', (e) => {
-			settings.showDocs = e.target.checked;
-			applyFeatureVisibilitySettings();
 		});
 		surfaceOpacitySlider.addEventListener('input', (e) => {
 			settings.surfaceOpacity = e.target.value
