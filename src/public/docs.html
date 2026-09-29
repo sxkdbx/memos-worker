@@ -389,50 +389,21 @@
 		} catch (error) {
 			console.error("读取 Memos 设置失败，回退到本地上传：", error);
 			// 提供一个安全的回退默认值
-			userSettings = { imageUploadDestination: 'local' };
+			userSettings = {};
 		}
 
 		async function uploadImage(file) {
-			const destination = userSettings.imageUploadDestination || 'local';
-			console.log(`图片上传方式: ${destination}`);
-
 			try {
-				if (destination === 'local') {
-					const formData = new FormData();
-					formData.append('file', file);
+				const formData = new FormData();
+				formData.append('file', file);
 
-					// 调用后端的本地上传接口
-					const response = await fetch('/api/upload/image', {
-						method: 'POST',
-						body: formData,
-					});
-					if (!response.ok) throw new Error(`本地上传失败：${await response.text()}`);
-					const result = await response.json();
-					return result.url;
-
-				} else if (destination === 'imgur') {
-					if (!userSettings.imgurClientId) {
-						throw new Error("设置中未配置 Imgur Client ID。");
-					}
-					const formData = new FormData();
-					formData.append('file', file);
-					formData.append('clientId', userSettings.imgurClientId); // 将 Client ID 发送到我们的后端代理
-
-					// 调用后端的 Imgur 代理上传接口
-					const response = await fetch('/api/proxy/upload/imgur', {
-						method: 'POST',
-						body: formData,
-					});
-
-					if (!response.ok) {
-						const errorResult = await response.json();
-						throw new Error(`Imgur 代理失败：${errorResult.message || '未知错误'}`);
-					}
-					const result = await response.json();
-					return result.url;
-				} else {
-					throw new Error(`未知的上传目标：${destination}`);
-				}
+				const response = await fetch('/api/upload/image', {
+					method: 'POST',
+					body: formData,
+				});
+				if (!response.ok) throw new Error(`本地上传失败：${await response.text()}`);
+				const result = await response.json();
+				return result.url;
 			} catch (error) {
 				console.error("图片上传失败：", error);
 				throw error; // 将错误重新抛出，以便粘贴处理器可以捕获它

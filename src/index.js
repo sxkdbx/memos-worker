@@ -195,9 +195,6 @@ async function handleApiRequest(request, env, ctx) {
 	if (request.method === 'GET' && pathname === '/api/attachments') {
 		return handleGetAllAttachments(request, env);
 	}
-	if (request.method === 'POST' && pathname === '/api/proxy/upload/imgur') {
-		return handleImgurProxyUpload(request, env);
-	}
 	if (pathname === '/api/stats') {
 		return handleStatsRequest(request, env);
 	}
@@ -485,8 +482,6 @@ async function handleGetSettings(request, env) {
 		showRightSidebar: true,
 		hideEditorInWaterfall: false,
 		showHeatmap: true, // 默认显示热力图
-		imageUploadDestination: 'local', // 'local'=GitHub公开仓库+jsDelivr直链, 'imgur'=Imgur
-		imgurClientId: '',
 		surfaceColor: '#ffffff',
 		surfaceColorDark: '#151f31',
 		surfaceOpacity: 1,
@@ -1298,50 +1293,6 @@ async function handleStandaloneImageUpload(request, env, ctx) {
 		console.error("Standalone Image Upload Error:", e.message);
 		const status = typeof e.status === 'number' ? e.status : 500;
 		return jsonResponse({ error: 'Upload failed', message: e.message }, status);
-	}
-}
-
-/**
- * 通过 Worker 代理上传图片到 Imgur
- */
-async function handleImgurProxyUpload(request, env) {
-	try {
-		const formData = await request.formData();
-		// 【注意】从前端获取 Client ID，而不是硬编码在后端
-		const clientId = formData.get('clientId');
-		if (!clientId) {
-			return jsonResponse({ error: 'Imgur Client ID is required.' }, 400);
-		}
-
-		// Imgur 需要 'image' 字段
-		const imageFile = formData.get('file');
-		const imgurFormData = new FormData();
-		imgurFormData.append('image', imageFile);
-
-		const imgurResponse = await fetch('https://api.imgur.com/3/image', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Client-ID ${clientId}`,
-			},
-			body: imgurFormData,
-		});
-
-		if (!imgurResponse.ok) {
-			const errorBody = await imgurResponse.json();
-			throw new Error(`Imgur API responded with status ${imgurResponse.status}: ${errorBody.data.error}`);
-		}
-
-		const result = await imgurResponse.json();
-
-		if (!result.success) {
-			throw new Error('Imgur API returned a failure response.');
-		}
-
-		return jsonResponse({ success: true, url: result.data.link });
-
-	} catch (e) {
-		console.error("Imgur Proxy Error:", e.message);
-		return jsonResponse({ error: 'Imgur upload failed via proxy', message: e.message }, 500);
 	}
 }
 

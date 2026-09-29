@@ -3624,27 +3624,6 @@
 			</div>
 
 			<div class='setting-group'>
-				<h4>粘贴即上传图片</h4>
-				<div id='image-upload-options'>
-					<div class='setting-item'>
-						<label for='upload-dest-local'>
-							<input type='radio' id='upload-dest-local' name='upload-destination' value='local' checked>
-							Local (via Worker & R2)
-						</label>
-					</div>
-					<div class='setting-item'>
-						<label for='upload-dest-imgur'>
-							<input type='radio' id='upload-dest-imgur' name='upload-destination' value='imgur'>
-							Imgur (Requires Client ID)
-						</label>
-					</div>
-				</div>
-				<div class='setting-item' id='imgur-client-id-wrapper' style='display: flex;'>
-					<label for='imgur-client-id'>Imgur Client ID</label>
-					<input type='text' id='imgur-client-id' placeholder='请输入你的 Imgur Client ID...'>
-				</div>
-			</div>
-			<div class='setting-group'>
 				<h4>Telegram 代理</h4>
 				<div class='setting-item'>
 					<label for='toggle-telegram-proxy'>Enable Video&File Proxy</label>
@@ -4015,26 +3994,6 @@
 		return result.url;
 	}
 
-	async function uploadToImgur(file) {
-		const clientId = settings.imgurClientId;
-		if (!clientId) {
-			throw new Error('设置中未填写 Imgur Client ID。');
-		}
-		const formData = new FormData();
-		formData.append('file', file);
-		formData.append('clientId', clientId);
-		const response = await fetch('/api/proxy/upload/imgur', {
-			method: 'POST',
-			body: formData
-		});
-		if (!response.ok) {
-			const errorResult = await response.json();
-			throw new Error(`Imgur proxy failed: ${errorResult.message || '未知错误'}`);
-		}
-		const result = await response.json();
-		return result.url;
-	}
-
 	function postProcessMarkdownHtml(html) {
 		if (!html || html.indexOf('#') === -1) {
 			return html;
@@ -4079,27 +4038,17 @@
 
 	async function handlePastedImage(imageFile, textarea) {
 		const placeholderId = `uploading-${Date.now()}`;
-		const placeholderMarkdown = `![Uploading image... ${placeholderId}]()`;
+		const placeholderMarkdown = `![正在上传图片... ${placeholderId}]()`;
 		insertTextAtCursor(textarea, placeholderMarkdown);
 		try {
-			const destination = settings.imageUploadDestination || 'local';
-			let finalUrl;
-			switch (destination) {
-				case 'imgur':
-					finalUrl = await uploadToImgur(imageFile);
-					break;
-				case 'local':
-				default:
-					finalUrl = await uploadToLocalWorker(imageFile);
-					break;
-			}
+			const finalUrl = await uploadToLocalWorker(imageFile);
 			const finalMarkdown = `![${imageFile.name || 'pasted-image.png'}](${finalUrl})`;
 			textarea.value = textarea.value.replace(placeholderMarkdown, finalMarkdown);
 		} catch (error) {
-			console.error('Image upload failed:', error);
-			const errorMarkdown = `![Upload Failed: ${error.message}]()`;
+			console.error('图片上传失败：', error);
+			const errorMarkdown = `![上传失败：${error.message}]()`;
 			textarea.value = textarea.value.replace(placeholderMarkdown, errorMarkdown);
-			showCustomAlert(`Image upload failed: ${error.message}`, 'error');
+			showCustomAlert(`图片上传失败：${error.message}`, 'error');
 		} finally {
 			textarea.dispatchEvent(new Event('input', { bubbles: true }));
 		}
@@ -4133,7 +4082,7 @@
 	const defaultSettings = {
 		showSearchBar: true, showStatsCard: true, showCalendar: true, showTags: true,
 		showTimeline: true, showRightSidebar: true, hideEditorInWaterfall: false,
-		showHeatmap: true, imageUploadDestination: 'local', imgurClientId: '',
+		showHeatmap: true,
 		surfaceColor: '#ffffff', surfaceColorDark: '#151f31', surfaceOpacity: 1,
 		backgroundOpacity: 1, backgroundImage: '/bg.jpg', backgroundBlur: 0,
 		waterfallCardWidth: 320, enableDateGrouping: false, telegramProxy: false,
@@ -4306,9 +4255,6 @@
 
 	const heatmapContainerWrapper = document.getElementById('heatmap-container-wrapper');
 	const heatmapTooltip = document.getElementById('heatmap-tooltip');
-	const imgurClientIdWrapper = document.getElementById('imgur-client-id-wrapper');
-	const imgurClientIdInput = document.getElementById('imgur-client-id');
-	const uploadDestinationRadios = document.querySelectorAll('input[name="upload-destination"]');
 	const attachmentsTabBtn = document.getElementById('attachments-tab-btn');
 	const attachmentsViewer = document.getElementById('attachments-viewer');
 	const attachmentsContent = document.getElementById('attachments-content');
@@ -5486,13 +5432,6 @@
 		notesSection.classList.toggle('date-grouping-enabled', settings.enableDateGrouping);
 
 		const areAllSidebarsHidden = !settings.showSearchBar && !settings.showStatsCard && !settings.showCalendar && !settings.showTags && !settings.showTimeline;
-		const currentDest = settings.imageUploadDestination || 'local';
-		const radioToCheck = document.getElementById(`upload-dest-${currentDest}`);
-		if (radioToCheck) {
-			radioToCheck.checked = true;
-		}
-		imgurClientIdInput.value = settings.imgurClientId || '';
-
 		if (areAllSidebarsHidden) {
 			// 如果都隐藏了，就给主容器添加 .no-sidebars 类
 			appLayoutContainer.classList.add('no-sidebars');
@@ -5645,12 +5584,6 @@
 			settings.showHeatmap = e.target.checked;
 			applySettings();
 		});
-		uploadDestinationRadios.forEach(radio => {
-			radio.addEventListener('change', (e) => {
-				const destination = e.target.value;
-				settings.imageUploadDestination = destination;
-			});
-		});
 		toggleDateGrouping.addEventListener('change', (e) => {
 			const isEnabled = e.target.checked;
 			settings.enableDateGrouping = isEnabled;
@@ -5664,9 +5597,6 @@
 		toggleContentTruncation.addEventListener('change', (e) => {
 			settings.enableContentTruncation = e.target.checked;
 			reRenderCachedNotes();
-		});
-		imgurClientIdInput.addEventListener('input', (e) => {
-			settings.imgurClientId = e.target.value.trim();
 		});
 		bgOpacitySlider.addEventListener('input', (e) => {
 			settings.backgroundOpacity = e.target.value;
