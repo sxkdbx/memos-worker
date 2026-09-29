@@ -4,7 +4,7 @@
 	<meta charset='UTF-8'>
 	<meta name='viewport' content='width=device-width, initial-scale=1.0'>
 	<script src='https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.12/marked.min.js'></script>
-	<title>Shared Memo</title>
+	<title>分享的笔记</title>
 	<link id='hljs-light-theme' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css'>
 	<link id='hljs-dark-theme' rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css' disabled>
 	<link rel='icon' type='image/png' href='/favicon.png'>
@@ -89,7 +89,7 @@
 <div class="wrapper">
 	<header>
 		<h3><a href='https://github.com/souvenp/memos-worker' target="_blank">MEMOS</a></h3>
-		<button type='button' id='theme-toggle-btn' class='icon-btn' title='Toggle Theme'></button>
+		<button type='button' id='theme-toggle-btn' class='icon-btn' title='切换主题'></button>
 	</header>
 	<main id="main-content">
 		<div id="loader">
@@ -175,12 +175,12 @@
 		try {
 			const urlParams = new URLSearchParams(window.location.search);
 			const publicId = urlParams.get('id');
-			if (!publicId) throw new Error("No share ID found in URL parameters.");
+			if (!publicId) throw new Error("链接中缺少分享 ID。");
 
 			const response = await fetch(`/api/public/note/${publicId}`);
 			if (!response.ok) {
 				const err = await response.json();
-				throw new Error(err.error || `Failed to load note (status: ${response.status})`);
+				throw new Error(err.error || `加载笔记失败（状态码：${response.status}）`);
 			}
 			const noteData = await response.json();
 
@@ -189,7 +189,7 @@
 
 		} catch (error) {
 			console.error(error);
-			loader.innerHTML = `<p style="color: #e53e3e;">Error: ${error.message}</p>`;
+			loader.innerHTML = `<p style="color: #e53e3e;">出错了：${error.message}</p>`;
 		}
 	}
 
