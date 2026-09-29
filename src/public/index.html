@@ -4808,6 +4808,13 @@
 	 * 切换内容区：首页/收藏/归档 显示笔记流，文件 显示附件网格。
 	 * 三种模式共用同一个主容器，观感完全一致。
 	 */
+	/** 同步三个点菜单里模式入口的高亮状态 */
+	function updateSidebarTabsUI() {
+		document.querySelectorAll('.mode-menu-item').forEach(btn => {
+			btn.classList.toggle('active', btn.dataset.mode === appState.baseMode);
+		});
+	}
+
 	function applyModeView() {
 		const isAttachments = appState.baseMode === 'attachments';
 		notesSection.style.display = isAttachments ? 'none' : '';
