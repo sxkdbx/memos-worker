@@ -1,6 +1,12 @@
 name = "memos-worker"
 compatibility_date = "2025-08-19"
 main = "src/index.js"
+
+# 关键：保留在 Cloudflare 后台手动配置的变量与 Secret。
+# 不加这一行，每次通过 Git 集成自动部署时，后台设置的 GITHUB_TOKEN /
+# USERNAME / PASSWORD 等都会被清掉，需要重新填一遍。
+keep_vars = true
+
 [assets]
 directory = "./src/public"
 run_worker_first = [
