@@ -147,22 +147,11 @@
   }
   #app-layout-container {
 	display: grid;
-	grid-template-columns: 300px 1fr 100px;
+	grid-template-columns: 300px 1fr;
 	gap: 1.5rem;
 	max-width: 1920px;
 	margin: 0 auto;
 	padding: 2rem 2rem 1rem;
-  }
-  #right-sidebar {
-	position: fixed;
-	right: 2rem;
-	top: 2rem;
-	align-self: start;
-	height: calc(100vh - 4rem);
-	overflow-y: auto;
-	display: flex;
-	flex-direction: column;
-	padding-top: 0.5rem;
   }
   #main-content-area {
 	min-width: 0;
@@ -311,13 +300,12 @@
 	margin-left: 8px;
   }
 
-  #left-sidebar, #right-sidebar {
+  #left-sidebar {
 	display: none;
   }
 
   /* 当父容器有 .app-visible 类时，才显示侧边栏 */
-  #app-layout-container.app-visible #left-sidebar,
-  #app-layout-container.app-visible #right-sidebar {
+  #app-layout-container.app-visible #left-sidebar {
 	display: block;
   }
   @media (max-width: 600px) {
@@ -349,9 +337,6 @@
   }
 
   @media (max-width: 1150px) {
-	#right-sidebar {
-	  display: none !important; /* 隐藏侧边栏 */
-	}
 	#wide-mode-toggle-btn {
 		display: none;
 	}
@@ -370,11 +355,6 @@
   }
 
   @media (max-width: 1300px) {
-	.sidebar-tab-btn {
-	  width: 60px !important;
-	  height: 60px !important;
-	}
-
 	.tag-name {
 	  max-width: 120px;
 	}
@@ -1589,8 +1569,19 @@
 	text-decoration: none;
   }
 
-  #app-layout-container.no-right-sidebar {
-	grid-template-columns: 300px 1fr;
+
+  /* 三个点菜单里的模式入口（首页/收藏/归档/文件）当前项高亮 */
+  .more-menu-item.active {
+	background-color: var(--primary-color);
+	color: #fff;
+  }
+  .more-menu-item.active svg {
+	fill: #fff;
+  }
+  .more-menu-divider {
+	height: 1px;
+	margin: 0.35rem 0;
+	background-color: var(--border-color);
   }
 
   #app-layout-container.full-width-mode {
@@ -1605,57 +1596,6 @@
 
   #app-layout-container.full-width-mode #main-content-area .container {
 	max-width: 85% !important;
-  }
-  .sidebar-buttons-group {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-	align-items: center;
-	width: 100%;
-  }
-
-  .sidebar-tab-btn {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	width: 70px;
-	height: 70px;
-	margin-bottom: 1rem;
-	background-color: var(--surface-color);
-	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	color: var(--text-secondary);
-	cursor: pointer;
-	font-size: 0.75rem;
-	font-weight: 500;
-	transition: all 0.2s ease;
-	text-align: center;
-	gap: 0.25rem;
-  }
-
-  .sidebar-tab-btn:hover {
-	background-color: var(--border-color);
-	color: var(--text-color);
-	transform: translateY(-2px);
-  }
-
-  .sidebar-tab-btn.active {
-	background-color: var(--primary-color);
-	color: white;
-	border-color: var(--primary-color);
-	transform: none;
-  }
-
-  .sidebar-tab-btn.active svg {
-	fill: white;
-  }
-
-  .sidebar-tab-btn svg {
-	width: 28px;
-	height: 28px;
-	fill: currentColor;
-	transition: fill 0.2s ease;
   }
 
   .timeline-item[data-level="year"] .timeline-label {
@@ -2589,16 +2529,6 @@
 	transform: translate(-50%, -120%);
   }
 
-  #app-layout-container.attachments-mode {
-	grid-template-columns: 1fr;
-  }
-  #app-layout-container.attachments-mode #left-sidebar {
-	display: none !important;
-  }
-  #app-layout-container.attachments-mode #main-content-area .container {
-	max-width: 1200px;
-	width: 90%;
-  }
   #attachments-viewer {
 	padding: 1rem 0;
   }
@@ -3138,6 +3068,23 @@
 							</button>
 
 							<div id='more-menu-popover' class='more-menu-popover'>
+								<button class='more-menu-item mode-menu-item active' data-mode='home'>
+									<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 5.69l5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z'/></svg>
+									<span>首页</span>
+								</button>
+								<button class='more-menu-item mode-menu-item' data-mode='favorites'>
+									<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 17.27l4.15 2.51c.76.46 1.69-.22 1.49-1.08l-1.1-4.72 3.67-3.18c.67-.58.31-1.68-.57-1.75l-4.83-.41-1.89-4.46c-.34-.81-1.5-.81-1.84 0L9.19 8.63l-4.83.41c-.88.07-1.24 1.17-.57 1.75l3.67 3.18-1.1 4.72c-.2.86.73 1.54 1.49 1.08l4.15-2.51z'/></svg>
+									<span>收藏</span>
+								</button>
+								<button class='more-menu-item mode-menu-item' data-mode='archive'>
+									<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm11-5.5l-4 4-4-4 1.41-1.41L11 13.67V10h2v3.67l1.59-1.58L16 13.5z'/></svg>
+									<span>归档</span>
+								</button>
+								<button class='more-menu-item mode-menu-item' data-mode='attachments'>
+									<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z'/></svg>
+									<span>文件</span>
+								</button>
+								<div class='more-menu-divider'></div>
 								<button id='settings-btn' class='more-menu-item'>
 									<svg xmlns='http://www.w3.org/2000/svg' height='24px' viewBox='0 0 24 24' width='24px' fill='currentColor'><path d='M0 0h24v24H0V0z' fill='none' /><path d='M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.09-.7-1.71-.98L14.82 2.8c-.05-.23-.26-.4-.5-.4h-4c-.25 0-.46.17-.5.4L9.19 5.3c-.62.27-1.19.58-1.71.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.09.7 1.71.98l.37 2.66c.05.23.26.4.5.4h4c.25 0 .46-.17-.5-.4l.37-2.66c.62-.28 1.19-.58 1.71-.98l2.49 1c.22.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z' /></svg>
 									<span>设置</span>
@@ -3242,48 +3189,19 @@
 					<div id='notes-container'></div>
 				</div>
 				<div id='scroll-loader' class='loading-indicator' style='display: none;'>Loading more...</div>
-			</div>
 
-			<!-- 附件浏览页面容器 -->
-			<div id="attachments-viewer" style="display: none;">
-				<header class="attachments-header">
-					<h3>文件</h3>
-				</header>
-				<div id="attachments-content" class="loading-state">
-					<div class="spinner"></div>
+				<!-- 文件浏览区（与首页/收藏/归档同级，切换时只换内容区） -->
+				<div id="attachments-viewer" style="display: none;">
+					<header class="attachments-header">
+						<h3>文件</h3>
+					</header>
+					<div id="attachments-content" class="loading-state">
+						<div class="spinner"></div>
+					</div>
 				</div>
 			</div>
-
 		</div>
 	</main>
-
-	<aside id='right-sidebar'>
-		<div class='sidebar-buttons-group'>
-			<button id='home-tab-btn' class='sidebar-tab-btn active' data-tab-name='home' title='首页'>
-				<svg xmlns='http://www.w3.org/2000/svg' height='28px' viewBox='0 0 24 24' width='28px' fill='currentColor'>
-					<path d='M0 0h24v24H0V0z' fill='none' />
-					<path d='M12 5.69l5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z' />
-				</svg>
-				<span>首页</span>
-			</button>
-			<button id='favorites-tab-btn' class='sidebar-tab-btn' data-tab-name='favorites' title='收藏'>
-				<svg xmlns='http://www.w3.org/2000/svg' height='28px' viewBox='0 0 24 24' width='28px' fill='currentColor'>
-					<path d='M0 0h24v24H0V0z' fill='none' />
-					<path
-						d='M12 17.27l4.15 2.51c.76.46 1.69-.22 1.49-1.08l-1.1-4.72 3.67-3.18c.67-.58.31-1.68-.57-1.75l-4.83-.41-1.89-4.46c-.34-.81-1.5-.81-1.84 0L9.19 8.63l-4.83.41c-.88.07-1.24 1.17-.57 1.75l3.67 3.18-1.1 4.72c-.2.86.73 1.54 1.49 1.08l4.15-2.51z' />
-				</svg>
-				<span>收藏</span>
-			</button>
-			<button id="archive-tab-btn" class="sidebar-tab-btn" data-tab-name="archive" title="归档">
-				<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 0 24 24" width="28px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm11-5.5l-4 4-4-4 1.41-1.41L11 13.67V10h2v3.67l1.59-1.58L16 13.5z"/></svg>
-				<span>归档</span>
-			</button>
-			<button id="attachments-tab-btn" class="sidebar-tab-btn" data-tab-name="attachments" title="附件">
-				<svg xmlns="http://www.w3.org/2000/svg" height="28px" viewBox="0 0 24 24" width="28px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
-				<span>文件</span>
-			</button>
-		</div>
-	</aside>
 
 </div>
 
@@ -3494,10 +3412,6 @@
 					<input type='checkbox' id='toggle-timeline' class='toggle-switch'>
 				</div>
 				<div class='setting-item'>
-					<label for='toggle-right-sidebar'>显示右侧栏</label>
-					<input type='checkbox' id='toggle-right-sidebar' class='toggle-switch'>
-				</div>
-				<div class='setting-item'>
 					<label for='toggle-date-grouping'>按日期分组</label>
 					<input type='checkbox' id='toggle-date-grouping' class='toggle-switch'>
 				</div>
@@ -3510,14 +3424,6 @@
 
 			<div class='setting-group'>
 				<h4>功能显示</h4>
-				<div class='setting-item'>
-					<label for='toggle-feature-favorites'>显示收藏</label>
-					<input type='checkbox' id='toggle-feature-favorites' class='toggle-switch'>
-				</div>
-				<div class='setting-item'>
-					<label for='toggle-feature-archive'>显示归档</label>
-					<input type='checkbox' id='toggle-feature-archive' class='toggle-switch'>
-				</div>
 				<div class='setting-item'>
 					<label for='toggle-feature-pinning'>启用置顶</label>
 					<input type='checkbox' id='toggle-feature-pinning' class='toggle-switch'>
@@ -4039,7 +3945,7 @@
 	// --- 全局设置管理 ---
 	const defaultSettings = {
 		showSearchBar: true, showStatsCard: true, showCalendar: true, showTags: true,
-		showTimeline: true, showRightSidebar: true, hideEditorInWaterfall: false,
+		showTimeline: true, hideEditorInWaterfall: false,
 		showHeatmap: true,
 		surfaceColor: '#ffffff', surfaceColorDark: '#151f31', surfaceOpacity: 1,
 		backgroundOpacity: 1, backgroundImage: '/bg.jpg', backgroundBlur: 0,
@@ -4156,15 +4062,13 @@
 	const statsTags = document.getElementById('stats-tags');
 	const insertImageBtn = document.getElementById('insert-image-btn');
 	const insertCodeBtn = document.getElementById('insert-code-btn');
-	const rightSidebar = document.getElementById('right-sidebar');
-	const homeTabBtn = document.getElementById('home-tab-btn');
-	const favoritesTabBtn = document.getElementById('favorites-tab-btn');
-	const archiveTabBtn = document.getElementById('archive-tab-btn');
 	const waterfallTabBtn = document.getElementById('waterfall-tab-btn');
 	// const waterfallPopoverMenu = document.getElementById('waterfall-popover-menu');
 	const toggleDateGrouping = document.getElementById('toggle-date-grouping');
 
-	const toggleRightSidebar = document.getElementById('toggle-right-sidebar');
+	// 三个点菜单里的模式入口（首页 / 收藏 / 归档 / 文件）
+	const modeMenuItems = document.querySelectorAll('.mode-menu-item');
+
 	const toggleCalendar = document.getElementById('toggle-calendar');
 	const toggleEditorInWaterfall = document.getElementById('toggle-editor-in-waterfall');
 
@@ -4212,7 +4116,6 @@
 
 	const heatmapContainerWrapper = document.getElementById('heatmap-container-wrapper');
 	const heatmapTooltip = document.getElementById('heatmap-tooltip');
-	const attachmentsTabBtn = document.getElementById('attachments-tab-btn');
 	const attachmentsViewer = document.getElementById('attachments-viewer');
 	const attachmentsContent = document.getElementById('attachments-content');
 
@@ -4767,14 +4670,6 @@
 		});
 	}
 
-	async function showAttachmentsViewer() {
-		appState.baseMode = 'attachments';
-		updateSidebarTabsUI();
-		appContainer.style.display = 'none';
-		attachmentsViewer.style.display = 'block';
-		appLayoutContainer.classList.add('attachments-mode');
-		await fetchAllAttachments(true);
-	}
 
 	// --- 为附件内容区添加无限滚动和图片预览的事件委托 ---
 	attachmentsContent.addEventListener('scroll', () => {
@@ -4910,45 +4805,37 @@
 		}
 	});
 	/**
-	 * 从附件视图切换回主页视图
+	 * 切换内容区：首页/收藏/归档 显示笔记流，文件 显示附件网格。
+	 * 三种模式共用同一个主容器，观感完全一致。
 	 */
-	function hideAttachmentsViewer() {
-		attachmentsViewer.style.display = 'none';
-		appContainer.style.display = 'block';
-		appLayoutContainer.classList.remove('attachments-mode');
+	function applyModeView() {
+		const isAttachments = appState.baseMode === 'attachments';
+		notesSection.style.display = isAttachments ? 'none' : '';
+		scrollLoader.style.display = isAttachments ? 'none' : '';
+		attachmentsViewer.style.display = isAttachments ? 'block' : 'none';
 	}
 
-	// --- 右侧栏按钮的点击事件 ---
-	homeTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'home') return;
-		hideAttachmentsViewer(); // 从附件页返回
-		appState.baseMode = 'home';
+	// --- 三个点菜单里的模式切换（首页 / 收藏 / 归档 / 文件）---
+	function switchMode(mode) {
+		if (appState.baseMode === mode) return;
+		appState.baseMode = mode;
+		applyModeView();
 		updateSidebarTabsUI();
 		updateEditorVisibility();
-		reloadNotes();
-	});
+		if (mode === 'attachments') {
+			fetchAllAttachments(true);
+		} else {
+			reloadNotes();
+		}
+	}
 
-	favoritesTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'favorites') return;
-		hideAttachmentsViewer(); // 从附件页返回
-		appState.baseMode = 'favorites';
-		updateSidebarTabsUI();
-		updateEditorVisibility();
-		reloadNotes();
-	});
-
-	archiveTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'archive') return;
-		hideAttachmentsViewer();
-		appState.baseMode = 'archive';
-		updateSidebarTabsUI();
-		updateEditorVisibility(); // 编辑器在归档页不显示
-		reloadNotes();
-	});
-
-	attachmentsTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'attachments') return;
-		showAttachmentsViewer();
+	modeMenuItems.forEach(item => {
+		item.addEventListener('click', () => {
+			switchMode(item.dataset.mode);
+			// 选完就把菜单收起来
+			moreMenuPopover.classList.remove('visible');
+			isMenuPinned = false;
+		});
 	});
 
 	async function handleImageUploadAndInsert(files, textarea) {
@@ -5035,6 +4922,9 @@
 				renderNotes(data.notes);
 				appState.pagination.hasMore = data.hasMore;
 				appState.pagination.currentPage = 1;
+				appState.baseMode = 'home';
+				applyModeView();
+				updateSidebarTabsUI();
 
 				// 处理加载更多的UI
 				if (!data.hasMore) {
@@ -5310,11 +5200,7 @@
 	 */
 	function applyFeatureVisibilitySettings() {
 		if (!settings) return;
-
-		// 控制右侧边栏的按钮
-		document.getElementById('favorites-tab-btn').style.display = settings.showFavorites ? '' : 'none';
-		document.getElementById('archive-tab-btn').style.display = settings.showArchive ? '' : 'none';
-
+		// 收藏/归档/文件入口已移入三个点菜单，常驻显示，无需再按设置隐藏
 	}
 	/**
 	 * 根据当前加载的设置，应用所有UI效果
@@ -5353,7 +5239,6 @@
 		calendarWrapper.style.display = settings.showCalendar ? '' : 'none';
 		tagsSectionWrapper.style.display = settings.showTags ? '' : 'none';
 		timelineSectionWrapper.style.display = settings.showTimeline ? '' : 'none';
-		rightSidebar.style.display = settings.showRightSidebar ? '' : 'none';
 		heatmapContainerWrapper.style.display = settings.showHeatmap ? '' : 'none';
 		notesSection.classList.toggle('date-grouping-enabled', settings.enableDateGrouping);
 
@@ -5364,11 +5249,6 @@
 		} else {
 			// 否则，确保移除这个类，恢复到正常的三栏或宽屏模式
 			appLayoutContainer.classList.remove('no-sidebars');
-		}
-		if (!settings.showRightSidebar) {
-			appLayoutContainer.classList.add('no-right-sidebar');
-		} else {
-			appLayoutContainer.classList.remove('no-right-sidebar');
 		}
 
 		const isDefaultBg = settings.backgroundImage === defaultSettings.backgroundImage;
@@ -5413,7 +5293,6 @@
 		toggleCalendar.checked = settings.showCalendar;
 		toggleTags.checked = settings.showTags;
 		toggleTimeline.checked = settings.showTimeline;
-		toggleRightSidebar.checked = settings.showRightSidebar;
 		toggleEditorInWaterfall.checked = settings.hideEditorInWaterfall;
 		toggleHeatmap.checked = settings.showHeatmap;
 		bgOpacitySlider.value = settings.backgroundOpacity;
@@ -5424,21 +5303,11 @@
 		toggleDateGrouping.checked = settings.enableDateGrouping;
 		document.getElementById('toggle-content-truncation').checked = settings.enableContentTruncation;
 		toggleTelegramProxy.checked = settings.telegramProxy;
-		document.getElementById('toggle-feature-favorites').checked = settings.showFavorites;
-		document.getElementById('toggle-feature-archive').checked = settings.showArchive;
 		document.getElementById('toggle-feature-pinning').checked = settings.enablePinning;
 		document.getElementById('toggle-feature-sharing').checked = settings.enableSharing;
 	}
 
 	function initializeSettings() {
-		document.getElementById('toggle-feature-favorites').addEventListener('change', (e) => {
-			settings.showFavorites = e.target.checked;
-			applyFeatureVisibilitySettings();
-		});
-		document.getElementById('toggle-feature-archive').addEventListener('change', (e) => {
-			settings.showArchive = e.target.checked;
-			applyFeatureVisibilitySettings();
-		});
 		document.getElementById('toggle-feature-pinning').addEventListener('change', (e) => {
 			settings.enablePinning = e.target.checked;
 		});
@@ -5495,10 +5364,6 @@
 		});
 		toggleTimeline.addEventListener('change', (e) => {
 			settings.showTimeline = e.target.checked;
-			applySettings();
-		});
-		toggleRightSidebar.addEventListener('change', (e) => {
-			settings.showRightSidebar = e.target.checked;
 			applySettings();
 		});
 		toggleHeatmap.addEventListener('change', (e) => {
@@ -5688,29 +5553,6 @@
 	// 		activePopoverNoteId = null;
 	// 	}, 200);
 	// }
-
-	// --- 右侧栏Tab按钮的交互逻辑 ---
-	function updateSidebarTabsUI() {
-		document.querySelectorAll('.sidebar-tab-btn').forEach(btn => {
-			btn.classList.toggle('active', btn.dataset.tabName === appState.baseMode);
-		});
-	}
-
-	homeTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'home') return;
-		appState.baseMode = 'home';
-		updateSidebarTabsUI();
-		updateEditorVisibility();
-		reloadNotes();
-	});
-
-	favoritesTabBtn.addEventListener('click', () => {
-		if (appState.baseMode === 'favorites') return;
-		appState.baseMode = 'favorites';
-		updateSidebarTabsUI();
-		updateEditorVisibility();
-		reloadNotes();
-	});
 
 
 	/**
@@ -7720,6 +7562,7 @@
 		// 如果当前不在 home 模式，切换回去
 		if (appState.baseMode !== 'home') {
 			appState.baseMode = 'home';
+			applyModeView();
 			updateSidebarTabsUI();
 		}
 
